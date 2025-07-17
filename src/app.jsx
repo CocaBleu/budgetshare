@@ -15,22 +15,23 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 
+import Expenses from "./Expenses";
+
 function App() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  // Nouveaux states pour la création espace + affichage espaces
   const [spaceName, setSpaceName] = useState("");
   const [spaceMembers, setSpaceMembers] = useState("");
   const [spaces, setSpaces] = useState([]);
+  const [selectedSpaceId, setSelectedSpaceId] = useState(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Ecoute les espaces où l’utilisateur est membre
         const q = query(
           collection(db, "spaces"),
           where("members", "array-contains", {
@@ -44,6 +45,11 @@ function App() {
             list.push({ id: doc.id, ...doc.data() });
           });
           setSpaces(list);
+
+          // Si aucun espace sélectionné, sélectionne le premier automatiquement
+          if (!selectedSpaceId && list.length > 0) {
+            setSelectedSpaceId(list[0].id);
+          }
         });
 
         return () => {
@@ -51,13 +57,14 @@ function App() {
         };
       } else {
         setSpaces([]);
+        setSelectedSpaceId(null);
       }
     });
 
     return () => {
       unsubscribeAuth();
     };
-  }, []);
+  }, [selectedSpaceId]);
 
   const handleSignup = async () => {
     setError("");
@@ -81,7 +88,6 @@ function App() {
     await signOut(auth);
   };
 
-  // Fonction pour créer un espace
   const handleCreateSpace = async () => {
     setError("");
     if (!spaceName) {
@@ -93,17 +99,13 @@ function App() {
       return;
     }
     try {
-      // Crée un tableau d’objets membres à partir de la chaîne email (séparée par virgule)
-      // Exemple: "a@mail.com, b@mail.com"
       const membersArray = spaceMembers
         .split(",")
         .map((email) => email.trim())
         .filter((email) => email.length > 0);
 
-      // Ajoute l’utilisateur courant automatiquement en tant que membre
       if (!membersArray.includes(user.email)) membersArray.push(user.email);
 
-      // On construit un tableau d’objets { email, sharePercent: 100 / nombre }
       const share = 100 / membersArray.length;
       const members = membersArray.map((email) => ({
         email,
@@ -150,12 +152,21 @@ function App() {
         {spaces.length === 0 && <p>Tu n’as aucun espace.</p>}
         <ul>
           {spaces.map((space) => (
-            <li key={space.id}>
+            <li
+              key={space.id}
+              style={{
+                cursor: "pointer",
+                fontWeight: selectedSpaceId === space.id ? "bold" : "normal",
+              }}
+              onClick={() => setSelectedSpaceId(space.id)}
+            >
               <strong>{space.name}</strong> - Membres :{" "}
               {space.members.map((m) => m.email).join(", ")}
             </li>
           ))}
         </ul>
+
+        {selectedSpaceId && <Expenses spaceId={selectedSpaceId} />}
       </div>
     );
   }
