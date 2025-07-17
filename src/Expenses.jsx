@@ -1,32 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "./firebase";
+import { db } from "./firebase";
 import {
   collection,
   addDoc,
   query,
   where,
   onSnapshot,
-  serverTimestamp,
+  Timestamp,
 } from "firebase/firestore";
 
-export default function Expenses({ spaceId }) {
+function Expenses({ spaceId }) {
   const [expenses, setExpenses] = useState([]);
-  const [desc, setDesc] = useState("");
+  const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [payer, setPayer] = useState(auth.currentUser.email);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!spaceId) return;
 
     const q = query(
-      collection(db, "spaces", spaceId, "expenses"),
-      // Optionnel: tu peux trier par date plus tard
+      collection(db, "expenses"),
+      where("spaceId", "==", spaceId)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const list = [];
-      snapshot.forEach((doc) => {
+      querySnapshot.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() });
       });
       setExpenses(list);
@@ -37,63 +36,56 @@ export default function Expenses({ spaceId }) {
 
   const handleAddExpense = async () => {
     setError("");
-    if (!desc || !amount || isNaN(amount) || amount <= 0) {
-      setError("Description et montant valides requis");
+    if (!description || !amount) {
+      setError("Merci de remplir la description et le montant.");
       return;
     }
-
     try {
-      await addDoc(collection(db, "spaces", spaceId, "expenses"), {
-        description: desc,
+      await addDoc(collection(db, "expenses"), {
+        spaceId,
+        description,
         amount: parseFloat(amount),
-        payer,
-        createdAt: serverTimestamp(),
+        createdAt: Timestamp.now(),
       });
-      setDesc("");
+      setDescription("");
       setAmount("");
-    } catch (e) {
-      setError(e.message);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
   return (
-    <div>
-      <h3>Dépenses</h3>
+    <div style={{ marginTop: 20 }}>
+      <h3>Dépenses de l’espace</h3>
 
-      <div>
-        <input
-          type="text"
-          placeholder="Description"
-          value={desc}
-          onChange={(e) => setDesc(e.target.value)}
-          style={{ marginRight: 8 }}
-        />
-        <input
-          type="number"
-          placeholder="Montant"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          style={{ marginRight: 8, width: 100 }}
-        />
-        <input
-          type="text"
-          placeholder="Payeur"
-          value={payer}
-          onChange={(e) => setPayer(e.target.value)}
-          style={{ marginRight: 8 }}
-        />
-        <button onClick={handleAddExpense}>Ajouter dépense</button>
-      </div>
+      <input
+        type="text"
+        placeholder="Description"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        style={{ marginRight: 8, padding: 8 }}
+      />
+      <input
+        type="number"
+        placeholder="Montant"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        style={{ marginRight: 8, padding: 8, width: 100 }}
+      />
+      <button onClick={handleAddExpense}>Ajouter dépense</button>
 
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <ul>
-        {expenses.map((exp) => (
-          <li key={exp.id}>
-            {exp.description} — {exp.amount.toFixed(2)} € payé par {exp.payer}
+      <ul style={{ marginTop: 20 }}>
+        {expenses.length === 0 && <li>Aucune dépense.</li>}
+        {expenses.map((expense) => (
+          <li key={expense.id}>
+            {expense.description} — {expense.amount.toFixed(2)} €
           </li>
         ))}
       </ul>
     </div>
   );
 }
+
+export default Expenses;
